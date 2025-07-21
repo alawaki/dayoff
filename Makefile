@@ -1,5 +1,8 @@
-bulid :
+bulid:
 	uv run dayoff/dayoff.py
 
-run :
+run:
 	uv run reflex run;
+
+clean:
+	rm dayoff/data.db
