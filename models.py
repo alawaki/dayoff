@@ -23,7 +23,16 @@ class User(Base):
     role = Column(SqlEnum(Role), nullable=False)
     password = Column(String, nullable=False)
 
-# مسیری که فایل دیتابیس SQLite ساخته میشه
+class Leave(Base):
+    __tablename__ = "leaves"
+
+    id = Column(Integer, primary_key=True, index=True)
+    f_name = Column(String, nullable = False)
+    l_name = Column(String, nullable = False)
+    start_date = Column(String, nullable = False)
+    end_date = Column(String, nullable = False)
+    reson = Column(String)
+
 DB_URL = "sqlite:///dayoff/data.db"
 engine = create_engine(DB_URL, echo=False)
 SessionLocal = sessionmaker(bind=engine)

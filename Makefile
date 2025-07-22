@@ -1,5 +1,5 @@
 bulid:
-	uv run dayoff/dayoff.py
+	uv run dayoff/main.py
 
 run:
 	uv run reflex run;

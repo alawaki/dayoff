@@ -1,28 +1,45 @@
 import reflex as rx
 import bcrypt
+import reflex
+import asyncio
 
 from rxconfig import config
-from models import init_db, SessionLocal, User, Role
+from models import init_db, SessionLocal, User, Role, Leave
 from utils import chek_password, hash_password
+
 
 init_db()
 
+
+
 class State(rx.State):
     """The app state."""
-    name: str
+    f_name: str
     l_name: str
     start_date: str
     end_date: str
     reson: str = ""
 
     def submit(self):
-        print(f"Leave request from {self.name}{self.l_name} ({self.start_date} to {self.end_date}): {self.reson}.")
+        db = SessionLocal()
+        leave = Leave(
+            f_name = self.f_name,
+            l_name = self.l_name,
+            start_date = self.start_date,
+            end_date = self.end_date,
+            reson = self.reson
+        )
+        db.add(leave)
+        db.commit()
+        db.close
 
-        self.name = ""
+        self.f_name = ""
         self.l_name = ""
         self.start_date = ""
         self.end_date = ""
         self.reson = ""
+
+        return rx.toast.success("Leave request submitted!", position = "top")
 
 class SignUpState(rx.State):
     username: str = ""
@@ -64,15 +81,12 @@ class SignUpState(rx.State):
         
         return rx.toast.success("Successful", description = " now log in", duration = 4000, position = "bottom-right")
 
-class LoginSate(rx.State):
+
+class LoginSatate(rx.State):
     username: str = ""
     password: str = ""
 
-    n = False
-    def notif():
-        return rx.toast.success("Login successful", position = "top-center")
-
-    def login(self):
+    async def login(self):
         session = SessionLocal()
         user = session.query(User).filter_by(username=self.username).first()
 
@@ -84,13 +98,28 @@ class LoginSate(rx.State):
             session.close()
             return rx.toast.error("Incorrect password!!", position = "top-center")
 
-        if self.n is True:
-            session.close()
-            return rx.toast.success("Login successful", position = "top-center")
         session.close()
-        return rx.redirect("/")
+        return rx.redirect("/profile")
 
 #rx.toast.success( title = "Login successful", status = "success", position = "top")
+
+class ProfileSatate(rx.State):
+    first_name : str = ""
+    last_name: str = ""
+    role: str = ""
+
+    user_info: str = "loading..."
+
+    async def load_user(self):
+        session = SessionLocal()
+        login_satate =  await rx.get_state(LoginSatate)
+        user = session.query(User).filter_by(username=login_satate.username).first()
+        if user:
+            self.first_name = user.first_name
+            self.last_name = user.last_name
+            self.role = user.role
+        session.close()
+        
 
 
 def submit_form() -> rx.Component:
@@ -98,42 +127,43 @@ def submit_form() -> rx.Component:
         rx.color_mode.button(position="top-right"),
         rx.heading("Submit a Leave Request.", size="7"),
         rx.text("Fill out the form."),
+        rx.form(
+            rx.vstack(
+                rx.input(
+                    placeholder="First Name:",
+                    value = State.f_name,
+                    on_change = State.set_f_name,
+                ),
 
-        rx.vstack(
-            rx.input(
-                placeholder="First Name:",
-                value = State.name,
-                on_change = State.set_name,
+                rx.input(
+                    placeholder="Last Name:",
+                    value = State.l_name,
+                    on_change = State.set_l_name,
+                ),
+
+                rx.input(
+                    placeholder = "Start Date:", 
+                    value = State.start_date,
+                    on_change = State.set_start_date,
+                ),
+
+                rx.input(
+                    placeholder = "End Date:", 
+                    value = State.end_date,
+                    on_change = State.set_end_date,
+                ),
+
+                rx.text_area(
+                    placeholder = "Reason for leave (optional):",
+                    value = State.reson,
+                    on_change = State.set_reson,
+                ),
+                rx.button("Submit", type_="submit"),
             ),
-
-            rx.input(
-                placeholder="Last Name:",
-                value = State.l_name,
-                on_change = State.set_l_name,
-            ),
-
-            rx.input(
-                placeholder = "Start Date:", 
-                value = State.start_date,
-                on_change = State.set_start_date,
-            ),
-
-            rx.input(
-                placeholder = "End Date:", 
-                value = State.end_date,
-                on_change = State.set_end_date,
-            ),
-
-            rx.text_area(
-                placeholder = "Reason for leave (optional):",
-                value = State.reson,
-                on_change = State.set_reson,
-            ),
-
-
+            on_submit = State.submit,
         ),
 
-        spacing = "4",
+            spacing = "4",
         padding = "5",
     )
 
@@ -164,7 +194,7 @@ def singup_form() -> rx.Component:
 
             rx.select(["admin", "employee"], on_change = SignUpState.set_role, value=SignUpState.role),
             rx.button("Submit", on_click = SignUpState.submit),
-            rx.button("Done", on_click = rx.redirect("/")),
+            rx.button("Next", on_click = rx.redirect("/")),
             spacing = "4",
             width = "300px"
         ),
@@ -175,9 +205,9 @@ def login_form():
     return rx.center(
         rx.vstack(
             rx.heading("Enter"),
-            rx.input(placeholder = "username:", on_change = LoginSate.set_username),
-            rx.input(placeholder = "password:", type = "password", on_change = LoginSate.set_password),
-            rx.button("Login", on_click = LoginSate.login), 
+            rx.input(placeholder = "username:", on_change = LoginSatate.set_username),
+            rx.input(placeholder = "password:", type = "password", on_change = LoginSatate.set_password),
+            rx.button("Login", on_click = LoginSatate.login), 
             spacing = "4",
             width= "300px"  
         ),
@@ -185,6 +215,15 @@ def login_form():
     )
 
 def profile() -> rx.Component:
+    return rx.container(
+        rx.color_mode.button(position="top-right"),
+        rx.vstack(
+            rx.heading("Your Profile", size="9"),
+            rx.text(ProfileSatate.user_info),
+            rx.button("Submit Leave Request", on_click=rx.redirect("/submit")),
+            padding = "7",
+            on_mount = ProfileSatate.load_user,
+    ))
     
 
 def index() -> rx.Component:
@@ -202,7 +241,6 @@ def index() -> rx.Component:
             rx.hstack(
                 rx.button("Log in", on_click = rx.redirect("/login")),
                 rx.button("Sign in", on_click= rx.redirect("/signup")),
-                #rx.button("Submit Leave Request", on_click=rx.redirect("/submit")),
                 #rx.button("View Request", on_click=rx.redirect("/view")),
                 spacing = "4",
             ),
@@ -227,6 +265,6 @@ app = rx.App()
 app.add_page(singup_form, route="/signup")
 app.add_page(login_form, route = "/login")
 app.add_page(index, route="/")
-add.app_page(profile, route = "/profile")
+app.add_page(profile, route = "/profile")
 app.add_page(submit_form, route="/submit")
-app.add_page(view_req, route = "/view")
+#app.add_page(view_req, route = "/view")
